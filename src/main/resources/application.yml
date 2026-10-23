@@ -5,21 +5,67 @@ server:
   error:
     include-stacktrace: never   # never expose stack traces to the client
 
-# --spring.datasource.username=root --spring.datasource.password=root
 spring:
   application:
-    name: customers-service
+    name: oficina-agua-pagos
   datasource:
-    url: ${DB_URL:jdbc:mariadb://localhost:3306/oficina_agua}
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/gota_db}
     username: ${DB_USERNAME:app_user}
-    password: ${DB_PASSWORD:app_password}   
+    password: ${DB_PASSWORD:app_password}
   jpa:
     hibernate:
       # "validate": Hibernate checks the entity matches the table but NEVER changes it.
-      # The schema is owned by db/init/01-schema.sql (not by Hibernate).
+      # The schema is owned by db/init/01-schema.sql and db/init/03-gota.sql.
       ddl-auto: validate
     open-in-view: false
     show-sql: true   # didactic: shows the prepared statements in the console. Disable in production.
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        # After the retries are exhausted the message is rejected and routed to the DLQ.
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2.0
+          max-interval: 10000
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000   # recommended by the bank contract
+            read-timeout: 3000
+
+# Datos entregados por el docente para el Banco (override with env vars)
+bank:
+  name: bank
+  base-url: ${BANK_BASE_URL:https://gdsi5lyj34.execute-api.us-east-1.amazonaws.com/prod}
+  url: ${bank.base-url}
+  api-key: ${BANK_API_KEY:enmimaquinafunciona}
+  team-code: ${TEAM_CODE:EQUIPO_A}
+  # Empty by default: only used for deterministic tests (SUCCESS, LOST_ACK, ERROR_500...).
+  simulation-scenario: ${BANK_SIMULATION_SCENARIO:}
+
+# Property name the OpenAPI generator uses for the x-api-key interceptor.
+bankpaymentssimulator:
+  security:
+    apiKeyAuth:
+      key: ${bank.api-key}
+
+# Nombres de las colas
+app:
+  rabbit:
+    exchange: ${RABBIT_EXCHANGE:pagos.exchange}
+    queue: ${RABBIT_QUEUE:pagos.queue}
+    routing-key: ${RABBIT_ROUTING_KEY:pagos.routing}
+    dlq-exchange: ${RABBIT_DLQ_EXCHANGE:pagos.dlx}
+    dlq-queue: ${RABBIT_DLQ_QUEUE:pagos.dlq}
 
 springdoc:
   swagger-ui:

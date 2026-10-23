@@ -6,7 +6,7 @@ services:
     container_name: clase11-mariadb
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
-      MARIADB_DATABASE: ${DB_NAME:-oficina_agua}
+      MARIADB_DATABASE: ${DB_NAME:-gota_db}
       MARIADB_USER: ${DB_USERNAME:-app_user}
       MARIADB_PASSWORD: ${DB_PASSWORD:-app_password}
     ports:
