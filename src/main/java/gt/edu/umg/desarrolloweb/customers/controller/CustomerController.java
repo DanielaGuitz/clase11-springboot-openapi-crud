@@ -4,14 +4,10 @@ import gt.edu.umg.desarrolloweb.customers.api.dto.CustomerDto;
 import gt.edu.umg.desarrolloweb.customers.api.dto.CustomerRequestDto;
 import gt.edu.umg.desarrolloweb.customers.api.spec.CustomersApi;
 import gt.edu.umg.desarrolloweb.customers.service.CustomerService;
-import umg.edu.gt.main.Main;
 
-import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -61,15 +57,5 @@ public class CustomerController implements CustomersApi {
         customerService.delete(customerId);
         return ResponseEntity.noContent().build(); // 204, no body
     }
-    
-    @GetMapping("/mostrarMensaje")
-    public String greeting(@RequestParam(value = "name", defaultValue = "Mundo") String name) {
-        Main m = new Main();
-        String test = m.mostrarMensaje("Que hace");
-    	return test;
-    }
-    
-
-    
 
 }
