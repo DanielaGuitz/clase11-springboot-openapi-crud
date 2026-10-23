@@ -101,6 +101,9 @@ public class PagoConsumidor {
 
         PayerDto payer = new PayerDto();
         payer.setCustomerCode("CLI-" + pago.getId());
+        // The simulator rejects explicit nulls for these optional fields, so send real values.
+        payer.setFullName("Cliente Oficina del Agua");
+        payer.setTaxId("CF");
         request.setPayer(payer);
 
         MoneyDto money = new MoneyDto();
@@ -108,7 +111,13 @@ public class PagoConsumidor {
         money.setCurrency(MoneyDto.CurrencyEnum.GTQ);
         request.setAmount(money);
 
-        request.setTransactionDate(transactionDate(pago));
+        OffsetDateTime transactionDate = transactionDate(pago);
+        if (transactionDate.isAfter(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(5))) {
+            markAsFailed(pago);
+            throw new AmqpRejectAndDontRequeueException(
+                    "La fecha de pago esta en el futuro para el pago " + pago.getId());
+        }
+        request.setTransactionDate(transactionDate);
         request.setChannel(mapChannel(pago.getMetodo()));
         request.setDescription(truncate("Servicio de agua pago " + pago.getId(), 140));
         request.putMetadataItem("sourceSystem", "springboot-oficina-agua");
@@ -148,8 +157,11 @@ public class PagoConsumidor {
         if (fecha == null) {
             return OffsetDateTime.now(ZoneOffset.UTC);
         }
-        // The monolith stores DATETIME without zone: interpret it in Guatemala (UTC-6).
-        return fecha.atStartOfDay(ZoneId.of("America/Guatemala")).toOffsetDateTime();
+        // The monolith stores a DATE without zone: interpret it in Guatemala (UTC-6)
+        // and normalize to UTC so the bank never receives an ambiguous offset.
+        return fecha.atStartOfDay(ZoneId.of("America/Guatemala"))
+                .toOffsetDateTime()
+                .withOffsetSameInstant(ZoneOffset.UTC);
     }
 
     private BankPaymentRequestDto.ChannelEnum mapChannel(String metodo) {
@@ -184,8 +196,10 @@ public class PagoConsumidor {
     }
 
     private void handleBankError(Pago pago, FeignException ex) {
-        int status = ex.status();
-        BankErrorDto error = parseError(ex);
+        // Feign wraps 429/5xx in RetryableException; the real status/body/headers live in the cause.
+        FeignException actual = unwrap(ex);
+        int status = actual.status();
+        BankErrorDto error = parseError(actual);
         String code = error == null ? null : error.getCode();
 
         if (status == 409) {
@@ -206,8 +220,10 @@ public class PagoConsumidor {
         }
 
         if (status == 429 || status >= 500 || status <= 0) {
+            String retryAfter = retryAfter(actual);
             log.warn("[CONSUMIDOR] Error transitorio en pago {} (http={} code={} retryAfter={}). Reintentando...",
-                    pago.getId(), status, code, retryAfter(ex));
+                    pago.getId(), status, code, retryAfter);
+            waitRetryAfter(retryAfter);
             throw ex; // Spring Retry applies the backoff; after 3 attempts -> DLQ.
         }
 
@@ -216,6 +232,35 @@ public class PagoConsumidor {
         log.error("[CONSUMIDOR] Pago {} rechazado por el Banco (http={} code={}). Enviado a DLQ.",
                 pago.getId(), status, code);
         throw new AmqpRejectAndDontRequeueException("Rechazo del banco: " + status + " " + code, ex);
+    }
+
+    private FeignException unwrap(FeignException ex) {
+        Throwable cause = ex.getCause();
+        return cause instanceof FeignException feignCause ? feignCause : ex;
+    }
+
+    /**
+     * 429/503 may include Retry-After (seconds). Wait at least that long before the
+     * Spring Retry backoff starts. Capped so a malicious header cannot block the listener.
+     */
+    private void waitRetryAfter(String retryAfter) {
+        if (retryAfter == null || retryAfter.isBlank()) {
+            return;
+        }
+        try {
+            long seconds = Long.parseLong(retryAfter.trim());
+            if (seconds <= 0) {
+                return;
+            }
+            long millis = Math.min(seconds, 30) * 1000L;
+            log.info("[CONSUMIDOR] Retry-After={} s; esperando {} ms antes del proximo intento.",
+                    seconds, millis);
+            Thread.sleep(millis);
+        } catch (NumberFormatException ex) {
+            // Retry-After may be an HTTP date; fall back to the normal backoff.
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private BankErrorDto parseError(FeignException ex) {

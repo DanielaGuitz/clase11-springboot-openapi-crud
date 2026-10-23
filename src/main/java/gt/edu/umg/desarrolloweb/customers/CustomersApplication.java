@@ -2,7 +2,9 @@ package gt.edu.umg.desarrolloweb.customers;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -16,6 +18,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *   the DataSource and the EntityManager using the properties in application.yml.
  */
 @SpringBootApplication(scanBasePackages = "gt.edu.umg.desarrolloweb")
+@EntityScan(basePackages = "gt.edu.umg.desarrolloweb")
+@EnableJpaRepositories(basePackages = "gt.edu.umg.desarrolloweb")
 @EnableFeignClients(basePackages = "gt.edu.umg.desarrolloweb.pagos")
 @EnableScheduling
 public class CustomersApplication {

@@ -17,6 +17,10 @@ spring:
       # "validate": Hibernate checks the entity matches the table but NEVER changes it.
       # The schema is owned by db/init/01-schema.sql and db/init/03-gota.sql.
       ddl-auto: validate
+      naming:
+        # Keep the exact table name from @Table; the monolith uses PascalCase ("Pagos").
+        # Without this, Hibernate lowercases it to "pagos" and fails on Linux MariaDB.
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     open-in-view: false
     show-sql: true   # didactic: shows the prepared statements in the console. Disable in production.
   rabbitmq:

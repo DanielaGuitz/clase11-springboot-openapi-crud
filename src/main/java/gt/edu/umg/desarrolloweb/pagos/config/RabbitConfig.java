@@ -82,7 +82,8 @@ public class RabbitConfig {
         return (target, retryTemplate) -> {
             Map<Class<? extends Throwable>, Boolean> retryable = Map.of(
                     AmqpRejectAndDontRequeueException.class, false);
-            retryTemplate.setRetryPolicy(new SimpleRetryPolicy(3, retryable, true));
+            // defaultValue=true: retry every other exception (429, 5xx, timeouts).
+            retryTemplate.setRetryPolicy(new SimpleRetryPolicy(3, retryable, true, true));
         };
     }
 
