@@ -78,3 +78,58 @@ clase11-springboot-openapi-crud/
   reconoce `CustomersApi`: `Maven > Update Project` (o `Reload`) despuÃ©s de `mvn compile`.
 - `ddl-auto: validate`: Hibernate **no** crea ni modifica tablas; el esquema lo manda el SQL.
 - Para reiniciar la BD desde cero: `docker compose down -v && docker compose up -d`.
+
+---
+
+## Feature 3 — Pagos con Banco (RabbitMQ + Feign + DLQ)
+
+Este microservicio extiende el CRUD de clientes con el procesamiento asíncrono de pagos hacia un banco simulado.
+
+### Arquitectura
+
+- **Productor (`PagoProductor`)**: `@Scheduled(fixedDelay = 10000)` busca `Pagos` en estado `Pendiente`, los envía a RabbitMQ (`pagos.exchange` / `pagos.routing-key`) y pasa a `En cola`.
+- **Consumidor (`PagoConsumidor`)**: escucha `pagos.queue`, construye `BankPaymentRequestDto`, genera `Idempotency-Key` `EQ-<team>-<pagoId>`, llama al banco vía Feign (`BankApiClient`).
+- **Cliente Feign (`FeignConfig`)**: añade `x-api-key`, `X-Correlation-Id` (UUID) y opcionalmente `X-Simulation-Scenario` (desde `-Dbank.simulation.scenario` o `bank.simulation-scenario`/`BANK_SIMULATION_SCENARIO`). Limpia headers por defecto para evitar duplicados.
+- **Reintentos/DLQ**: `SimpleRabbitListenerContainerFactory` con `SimpleRetryPolicy` (3 intentos). Errores transitorios (`5xx`, `429`, `503`) se reintentan con backoff exponencial. Tras agotarse, `BankMessageRecoverer` envía a `pagos.dlx`/`pagos.dlq` y marca el pago como `Fallido - Revisar`. `409 DUPLICATE_PAYMENT` se trata como éxito.
+- **Persistencia**: JPA con `PhysicalNamingStrategyStandardImpl` para mantener nombres PascalCase (`Pagos`) en Linux/MariaDB.
+
+### Correr con contenedores de prueba (local)
+
+```bash
+# Levantar MariaDB y RabbitMQ para pruebas
+docker run -d --name gota-test-db -e MARIADB_ROOT_PASSWORD=root_password \
+  -e MARIADB_DATABASE=gota_db -e MARIADB_USER=app_user -e MARIADB_PASSWORD=app_password \
+  -p 3308:3306 -v "%cd%/db/init:/docker-entrypoint-initdb.d:ro" mariadb:11.4
+
+docker run -d --name gota-test-rabbit -p 5673:5672 -p 15673:15672 rabbitmq:3-management
+```
+
+### Variables de entorno
+
+| Variable | Default | Descripción |
+| --- | --- | --- |
+| `SERVER_PORT` | `8080` | Puerto de la app |
+| `DB_URL` | `jdbc:mariadb://localhost:3306/gota_db` | JDBC URL |
+| `DB_USERNAME` | `app_user` | Usuario BD |
+| `DB_PASSWORD` | `app_password` | Password BD |
+| `RABBITMQ_HOST` | `localhost` | Host RabbitMQ |
+| `RABBITMQ_PORT` | `5672` | Puerto AMQP |
+| `BANK_BASE_URL` | `https://gdsi5lyj34.execute-api.us-east-1.amazonaws.com/prod` | Base URL banco |
+| `BANK_API_KEY` | `enmimaquinafunciona` | API key |
+| `TEAM_CODE` | `EQUIPO_A` | Código de equipo |
+| `BANK_SIMULATION_SCENARIO` | (vacío) | Forzar escenario (`SUCCESS`, `LOST_ACK`, `ERROR_500`, etc.) |
+
+### Ejecución
+
+```bash
+set JAVA_HOME=C:\Users\danie\.jdks\ms-17.0.20
+set DB_URL=jdbc:mariadb://localhost:3308/gota_db
+set RABBITMQ_PORT=5673
+set SERVER_PORT=8081
+set TEAM_CODE=EQUIPO_A
+C:\Users\danie\.trae\tools\maven\latest\bin\mvn.cmd -Dbank.simulation.scenario=SUCCESS spring-boot:run
+```
+
+### Escenarios de prueba
+
+Ver [docs/escenarios-prueba.md](docs/escenarios-prueba.md) para procedimientos detallados (éxito, duplicado 409, `ERROR_500` ? 3 reintentos ? DLQ).
