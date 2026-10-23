@@ -1,0 +1,215 @@
+# Contract-first: this file is written BEFORE any Java code.
+# The Maven plugin generates the Java interface (CustomersApi) and DTOs from it,
+# and Swagger UI serves it as live documentation at /swagger-ui.html
+openapi: 3.0.3
+info:
+  title: Customers API - Oficina del Agua
+  description: |
+    CRUD de clientes de la Oficina del Agua (Clase 11 - Desarrollo Web).
+    Ejemplo didactico de diseno contract-first con OpenAPI + Spring Boot.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local
+tags:
+  - name: Customers
+    description: Gestion de clientes
+
+paths:
+  /api/v1/customers:
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: Lista los clientes
+      parameters:
+        - name: active
+          in: query
+          required: false
+          description: Si se envia, filtra por clientes activos (true) o inactivos (false)
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Customer'
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Crea un cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '201':
+          description: Cliente creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        
+
+  /api/v1/customers/{customerId}:
+    parameters:
+      - $ref: '#/components/parameters/CustomerId'
+    get:
+      tags: [Customers]
+      operationId: getCustomer
+      summary: Obtiene un cliente por id
+      responses:
+        '200':
+          description: Cliente encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Actualiza un cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '200':
+          description: Cliente actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    delete:
+      tags: [Customers]
+      operationId: deleteCustomer
+      summary: Elimina un cliente
+      responses:
+        '204':
+          description: Cliente eliminado
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  schemas:
+    CustomerRequest:
+      type: object
+      description: Datos que envia el cliente HTTP para crear/actualizar (sin id ni fechas)
+      required: [fullName, meterCode, address]
+      properties:
+        fullName:
+          type: string
+          minLength: 3
+          maxLength: 120
+          example: Maria Lopez
+        meterCode:
+          type: string
+          description: Codigo del contador de agua (unico)
+          pattern: '^MTR-[0-9]{5}$'
+          example: MTR-00001
+        address:
+          type: string
+          maxLength: 200
+          example: 4a calle 5-20 zona 1, Guatemala
+        email:
+          type: string
+          format: email
+          maxLength: 120
+          example: maria.lopez@example.com
+        active:
+          type: boolean
+          default: true
+
+    Customer:
+      type: object
+      description: Representacion de un cliente que devuelve la API
+      required: [id, fullName, meterCode, address, active, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        fullName:
+          type: string
+          example: Maria Lopez
+        meterCode:
+          type: string
+          example: MTR-00001
+        address:
+          type: string
+          example: 4a calle 5-20 zona 1, Guatemala
+        other:
+          type: string
+        email:
+          type: string
+          example: maria.lopez@example.com
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [status, message]
+      properties:
+        status:
+          type: integer
+          example: 404
+        message:
+          type: string
+          example: Customer 99 not found
+        details:
+          type: array
+          items:
+            type: string
+
+  responses:
+    BadRequest:
+      description: Datos invalidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Conflicto (por ejemplo, meterCode duplicado)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

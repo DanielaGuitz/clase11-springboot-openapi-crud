@@ -1,0 +1,29 @@
+# Configuration lives here, not in the code. Values use ${ENV_VAR:default}:
+# if the environment variable exists it wins, otherwise the local default is used.
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-stacktrace: never   # never expose stack traces to the client
+
+# --spring.datasource.username=root --spring.datasource.password=root
+spring:
+  application:
+    name: customers-service
+  datasource:
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/oficina_agua}
+    username: ${DB_USERNAME:app_user}
+    password: ${DB_PASSWORD:app_password}   
+  jpa:
+    hibernate:
+      # "validate": Hibernate checks the entity matches the table but NEVER changes it.
+      # The schema is owned by db/init/01-schema.sql (not by Hibernate).
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: true   # didactic: shows the prepared statements in the console. Disable in production.
+
+springdoc:
+  swagger-ui:
+    # Swagger UI shows OUR contract (the YAML), not one inferred from the code
+    url: /openapi/customers-api.yaml
+  api-docs:
+    enabled: true

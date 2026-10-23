@@ -1,0 +1,24 @@
+# Local MariaDB for the class. Same idea as the Fase 2 docker-compose.yml:
+# every dependency of the service runs locally in a container.
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: clase11-mariadb
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MARIADB_DATABASE: ${DB_NAME:-oficina_agua}
+      MARIADB_USER: ${DB_USERNAME:-app_user}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-app_password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mariadb-data:
