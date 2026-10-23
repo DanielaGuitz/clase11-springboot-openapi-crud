@@ -56,12 +56,6 @@ bank:
   # Empty by default: only used for deterministic tests (SUCCESS, LOST_ACK, ERROR_500...).
   simulation-scenario: ${BANK_SIMULATION_SCENARIO:}
 
-# Property name the OpenAPI generator uses for the x-api-key interceptor.
-bankpaymentssimulator:
-  security:
-    apiKeyAuth:
-      key: ${bank.api-key}
-
 # Nombres de las colas
 app:
   rabbit:

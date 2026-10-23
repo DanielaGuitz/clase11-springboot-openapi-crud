@@ -52,9 +52,6 @@ public class PagoConsumidor {
     @Value("${bank.team-code}")
     private String teamCode;
 
-    @Value("${bank.simulation-scenario:}")
-    private String simulationScenario;
-
     public PagoConsumidor(PagoRepository repo, BankApiClient bankClient, ObjectMapper objectMapper) {
         this.repo = repo;
         this.bankClient = bankClient;
@@ -75,9 +72,9 @@ public class PagoConsumidor {
             BankPaymentRequestDto request = buildRequest(pago);
             String idempotencyKey = buildIdempotencyKey(pago);
 
-            // x-api-key is added by the generated interceptor; correlation id by FeignConfig.
+            // x-api-key, correlation id and X-Simulation-Scenario are added by FeignConfig.
             ResponseEntity<BankPaymentReceiptDto> response = bankClient.sendBankPayment(
-                    idempotencyKey, request, null, scenarioHeader());
+                    idempotencyKey, request, null, null);
 
             BankPaymentReceiptDto receipt = response.getBody();
             String receiptId = receipt == null ? null : receipt.getReceiptId();
@@ -187,12 +184,6 @@ public class PagoConsumidor {
                 ? "EQ" + teamCode.substring("EQUIPO_".length())
                 : "EQX";
         return prefix + "-" + String.format("%06d", pago.getId());
-    }
-
-    private String scenarioHeader() {
-        return simulationScenario == null || simulationScenario.isBlank()
-                ? null
-                : simulationScenario.trim();
     }
 
     private void handleBankError(Pago pago, FeignException ex) {
